@@ -1,0 +1,59 @@
+<html>
+<head>
+    <title>Movie Library</title>
+    <script src="script.js"></script>
+    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+    <body>
+        <h1 class="page-title">Welcome to the Movie Library</h1>
+        <form id="search-form" class="search-panel" onsubmit="return false;">
+            <div class="search-row">
+                <label for="title">Title</label>
+                <input type="text" id="title" name="title" placeholder="Start typing a movie title">
+            </div>
+            <div class="search-row">
+                <label for="year">Year</label>
+                <input type="text" id="year" name="year" placeholder="e.g. 1999" inputmode="numeric">
+            </div>
+            <div class="search-row search-row-full">
+                <label for="plot">Plot</label>
+                <input type="text" id="plot" name="plot" placeholder="Search within plot text">
+            </div>
+        </form>
+
+        <h2 id="result-count"></h2>
+        <div id="results"></div>
+
+        <template id="movie-panel">
+            <div class="movie">
+                <img class="movie-poster" src="" alt="Movie Poster">
+                <p class="movie-quality"></p>
+                <div class="movie-title">
+                    <h2 class="title"></h2>
+                    <p class="edition"></p>
+                </div>
+                <div class="movie-details">
+                    <p class="movie-year"></p>
+                    <p class="movie-actors"></p>
+                    <p class="movie-director"></p>
+                    <p class="movie-genre"></p>
+                </div>
+                <p class="movie-plot"></p>
+                <details class="movie-special-features">
+                    <summary>Special Features</summary>
+                    <ul class="special-features-list">
+                        <li class="behind-the-scenes"></li>
+                        <li class="deleted-scenes"></li>
+                        <li class="featurettes"></li>
+                        <li class="interviews"></li>
+                        <li class="scenes"></li>
+                        <li class="shorts"></li>
+                        <li class="trailers"></li>
+                        <li class="other"></li>
+                    </ul>
+                </details>
+            </div>
+        </template>
+    </body>
+</html>
