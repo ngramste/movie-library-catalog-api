@@ -152,6 +152,18 @@ function displayResults(results) {
         } else {
             clone.querySelector(".edition").style.display = "none";
         }
+
+        // Convert runtime from minutes, to hours and minutes
+        const runtimeMinutes = parseInt(movie.metadata.format.tags.RUNTIME);
+        if (!isNaN(runtimeMinutes)) {
+            const hours = Math.floor(runtimeMinutes / 60);
+            const minutes = runtimeMinutes % 60;
+            clone.querySelector(".movie-runtime").textContent = `${hours}h ${minutes}m`;
+        } else {
+            clone.querySelector(".movie-runtime").textContent = `${movie.metadata.format.tags.RUNTIME}`;
+        }
+
+        clone.querySelector(".movie-rating").textContent = `${movie.metadata.format.tags.RATED}`;
         clone.querySelector(".movie-year").textContent = `${movie.year}`;
         clone.querySelector(".movie-quality").textContent = `${resolutionToQuality(movie.metadata.streams[0])}`;
         clone.querySelector(".movie-quality").setAttribute("class", `movie-quality ${resolutionToQuality(movie.metadata.streams[0])}`);

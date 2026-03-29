@@ -7,11 +7,16 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from mysql.connector import Error
 import time
+from datetime import datetime
 import requests
+import threading
+from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import re
 
 import json
+from croniter import croniter
 
 import movie_metadata as metadata
 
@@ -22,8 +27,13 @@ MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DB = os.getenv("MYSQL_DATABASE")
 MOVIES_PATH = os.getenv("MOVIES_PATH", "/movies")
+TIMEZONE = os.getenv("TZ", "America/Chicago")
 
 app = Flask(__name__)
+
+
+def current_time_in_timezone():
+    return datetime.now(ZoneInfo(TIMEZONE))
 
 def find_roman_numeral(title):
     words = title.split(' ')
@@ -44,7 +54,11 @@ def replace_roman_numeral(title):
     return title
 
 def get_imdb_info(title, year, api_key):
+    title = str(title)
+    year = str(year)
+
     # The ideal search is for an exact match
+    print(f"Searching OMDB for exact match: title='{title}', year='{year}'")
     url = f"http://www.omdbapi.com/?apikey={api_key}&t={quote(title)}&y={quote(year)}"
 
     response = requests.get(url)
@@ -124,6 +138,9 @@ def initialize_db():
     cursor.execute("""
         CREATE TABLE movies (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            filename VARCHAR(255),
+            filesize BIGINT,
+            file_exists BOOLEAN,
             imdb_id VARCHAR(20),
             title VARCHAR(255),
             year INT,
@@ -137,9 +154,15 @@ def initialize_db():
     cursor.close()
     db.close()
 
-def rebuild_db():
+def rebuild_db(full_rebuild):
     db = connect_db()
     cursor = db.cursor()
+
+    # If we are not doing a full rebuild, mark all existing rows as file_exists = FALSE so that we spot missing files when we scan the folders
+    if not full_rebuild:
+        # Set the file_exists flag to false for all rows in the movies table
+        cursor.execute("UPDATE movies SET file_exists = FALSE")
+        db.commit()
 
     folders = [f for f in listdir(MOVIES_PATH) if not isfile(join(MOVIES_PATH, f))]
     number_of_folders = len(folders)
@@ -165,14 +188,6 @@ def rebuild_db():
         # Find the largest file in this folder
         file = max(files, key=lambda f: os.path.getsize(join(folder_path, f)))
 
-        # Get the filetype of the file
-        filetype = os.path.splitext(file)[1][1:].lower()
-
-        path = join(f"{folder_path}", file)
-
-        # Check the file for existing imdb data within the metadata of the file
-        data = metadata.get_metadata(path)
-
         # Build a json object of all subfolders and files in those subfolders
         subfolders = [f for f in listdir(folder_path) if not isfile(join(folder_path, f))]
 
@@ -188,6 +203,30 @@ def rebuild_db():
         if subfolder_data == {}:
             subfolder_data = None
 
+        # If we are doing a partial rebuild, check if this file already exists in the database and mark it as file_exists = TRUE if it does
+        if not full_rebuild:
+            cursor.execute("SELECT id FROM movies WHERE filename = %s AND filesize = %s", (file, os.path.getsize(join(folder_path, file))))
+            row = cursor.fetchone()
+            if row:
+                # Set the file_exists flag to TRUE for this row since the file exists on disk
+                cursor.execute("UPDATE movies SET file_exists = TRUE WHERE id = %s", (row[0],))
+
+                # Update the subfolder_data column for this row in the database
+                cursor.execute("UPDATE movies SET special_features = %s WHERE id = %s", (json.dumps(subfolder_data), row[0]))
+
+                db.commit()
+                continue
+
+        # File is either missing from the database or we are doing a full rebuild and need to insert it as a new row
+
+        # Get the filetype of the file
+        filetype = os.path.splitext(file)[1][1:].lower()
+
+        path = join(f"{folder_path}", file)
+
+        # Check the file for existing imdb data within the metadata of the file
+        data = metadata.get_metadata(path)
+
         # If the file is missing imdb data, try to get it from the filename and the OMDB API
         if not data or 'format' not in data or 'tags' not in data['format'] or 'IMDB' not in data['format']['tags']:
             print(f"Metadata for '{title}' ({year}) is missing IMDb data. Attempting to fetch from OMDB API...")
@@ -195,23 +234,49 @@ def rebuild_db():
             if api_key:
                 imdb_data = get_imdb_info(title, year, api_key)
                 if imdb_data:
-                    # Write the metadata to file
-                    metadata.update_metadata(path, imdb_data)
-                    data = metadata.get_metadata(path)
+                    if os.getenv("ENABLE_WRITE", "False").lower() == "true":
+                        # Write the metadata to file
+                        metadata.update_metadata(path, imdb_data)
+                        data = metadata.get_metadata(path)
+                    else:
+                        # Build the metadata object from the fetched IMDb data without writing it to the file
+                        data = metadata.omdb_to_metadata(path, imdb_data)
+
                 else:
                     print(f"Could not fetch IMDb data for '{title}' ({year}) from OMDB API.")
 
         # Insert the data into the database
         try:
             cursor.execute(
-                "INSERT INTO movies (imdb_id, title, year, edition, metadata, filetype, special_features) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (data['format']['tags'].get('IMDB', ''), title, year, edition, json.dumps(data), filetype, json.dumps(subfolder_data))
+                "INSERT INTO movies (filename, filesize, file_exists, imdb_id, title, year, edition, metadata, filetype, special_features) \
+                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    file, 
+                    os.path.getsize(path), 
+                    True, 
+                    data['format']['tags'].get('IMDB', ''), 
+                    title, 
+                    year, 
+                    edition, 
+                    json.dumps(data), 
+                    filetype, 
+                    json.dumps(subfolder_data)
+                )
             )
         except Exception as e:
             print(f"Error inserting data for {title} ({year}): {e}")
             continue
     
     db.commit()
+
+    # Check for any movies that were in the database but whose files no longer exist on disk
+    cursor.execute("SELECT id, filename FROM movies WHERE file_exists = FALSE")
+    missing_files = cursor.fetchall()
+    if missing_files:
+        # Remove the rows for missing files from the database
+        cursor.execute("DELETE FROM movies WHERE file_exists = FALSE")
+        db.commit()
+
     cursor.close()
     db.close()
 
@@ -292,8 +357,6 @@ def list_movies():
         query += " AND metadata->>'$.format.tags.GENRE' LIKE %s COLLATE utf8mb4_0900_ai_ci"
         params.append(f"%{genre}%")
 
-    print(f"Executing query: {query} with params {params}")
-
     cursor.execute(query, params)
     result = cursor.fetchall()
     cursor.close()
@@ -347,14 +410,52 @@ def download_posters():
     cursor.close()
     db.close()
 
+# Set up a thread that runs the database rebuild on a schedule defined by the cron schedule environment variable
+def update_db_thread():
+    if os.getenv("ENABLE_CRON_DB_REBUILD", "False").lower() != "true":
+        print("Cron-based database rebuild is disabled.")
+        return
+
+    cron_schedule = os.getenv("CRON_DB_REBUILD_SCHEDULE", "0 4 * * *").strip()
+
+    try:
+        cron = croniter(cron_schedule, current_time_in_timezone())
+    except Exception as error:
+        print(f"Invalid CRON_DB_REBUILD_SCHEDULE '{cron_schedule}': {error}")
+        return
+
+    print(f"Cron-based database rebuild enabled with schedule '{cron_schedule}' in timezone '{TIMEZONE}'")
+
+    while True:
+        next_run = cron.get_next(datetime)
+        sleep_seconds = max(1, int((next_run - current_time_in_timezone()).total_seconds()))
+        print(f"Current system time is {current_time_in_timezone().isoformat()}")
+        print(f"Next scheduled database rebuild at {next_run.isoformat()}")
+        time.sleep(sleep_seconds)
+
+        try:
+            print("Starting scheduled database rebuild...")
+            rebuild_db(False)
+            print("Starting scheduled poster download...")
+            download_posters()
+            print("Scheduled database rebuild completed.")
+        except Exception as error:
+            print(f"Scheduled database rebuild failed: {error}")
+
 if __name__ == "__main__":
-    print("Waiting for MySQL to be ready...")
-    time.sleep(5)
-    print("Initializing database...")
-    initialize_db()
-    print("Rebuilding database with movie metadata...")
-    rebuild_db()
-    print("Download poster images for movies...")
-    download_posters()
+    if os.getenv("QUICK_LAUNCH_DEV", "False").lower() == "false":
+        print("Waiting for MySQL to be ready...")
+        time.sleep(5)
+        if os.getenv("FULL_REBUILD_DB", "False").lower() == "true":
+            print("Initializing database...")
+            initialize_db()
+        print("Rebuilding database with movie metadata...")
+        rebuild_db(os.getenv("FULL_REBUILD_DB", "False").lower() == "true")
+        print("Download poster images for movies...")
+        download_posters()
+
+    rebuild_thread = threading.Thread(target=update_db_thread, daemon=True)
+    rebuild_thread.start()
+
     print("Starting Flask app...")
     app.run(host="0.0.0.0", port=5000)

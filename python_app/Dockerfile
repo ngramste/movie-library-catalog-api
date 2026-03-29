@@ -1,13 +1,13 @@
 FROM python:3.12-slim
 
-# Install ffmpeg and dependencies
+ENV TZ=${TIMEZONE}
+
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install mkvpropedit and dependencies
-RUN apt-get update && apt-get install -y \
     mkvtoolnix \
+    tzdata \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

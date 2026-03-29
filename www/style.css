@@ -258,9 +258,24 @@ body {
 
     & .movie-details {
         @media (max-width: 800px) {
-            & .movie-actors, & .movie-director, & .movie-genre {
+            & .movie-actors, & .movie-director, & .movie-genre, & .movie-rating, & .movie-runtime {
                 display: none;
             }
+        }
+
+        & .movie-rating {
+            border: 1px solid #888888;
+            border-radius: 4px;
+            padding: 2px 6px;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        & .movie-runtime {
+            border: 1px solid #888888;
+            border-radius: 4px;
+            padding: 2px 6px;
+            display: inline-block;
         }
 
         & * {

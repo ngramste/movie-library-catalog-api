@@ -146,6 +146,28 @@ def get_resolution(video_path):
         'height': resolution[1] if len(resolution) >= 2 else "error"
     }
 
+def omdb_to_metadata(video_path, omdb_data):
+    resolution = get_resolution(video_path)
+
+    if not omdb_data:
+        return None
+
+    metadata = {
+        'format': {
+            'tags': {}
+        },
+        'streams': [{
+            'width': resolution['width'],
+            'height': resolution['height']
+        }]
+    }
+    
+    for key, value in omdb_data.items():
+        metadata['format']['tags'][key.upper()] = value
+
+    return metadata
+
+
 def get_metadata(video_path):
     metadada = None
 
