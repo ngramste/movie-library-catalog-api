@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from xml.sax.saxutils import escape
 from mutagen.mp4 import MP4
-
+import re
 
 # Function that takes the path to a video file and updates the metadata using mkvpropedit
 def update_metadata_mkv(video_path, data):
@@ -77,6 +77,8 @@ def update_metadata_mp4(video_path, data):
 
 # Function that takes the path to a video file and updates the metadata using mkvpropedit
 def update_metadata(video_path, data):
+    data['IMDB'] = data['imdbID']
+    data['imdb_title'] = f"{data['Title']} ({data['Year']})"
     if video_path.endswith('.mkv') or video_path.endswith('.avi'):
         update_metadata_mkv(video_path, data)
     elif video_path.endswith('.mp4') or video_path.endswith('.m4v'):
@@ -179,13 +181,20 @@ def get_metadata(video_path):
     # If we didn't pull any metadata, get the resolution and return that we do have
     if None == metadada:
         resolution = get_resolution(video_path)
+        
+        # Store the title which should be the filename without the year, edition, and extension
+        # For example, if the filename is "Movie Title (2023) {edition-xyz}.mkv", we want "Movie Title"
+        filename = ".".join(video_path.split("\\")[-1].split(".")[:-1])
+        result = re.search(r"^(?P<title>.+?)\s*\(\d{4}\)(?:\s*\{.+?\})?$", filename)
+        title = result.group("title").strip() if result else filename
 
         metadada = {
             'format': {
                 'tags': {
                     'IMDB': "error",
+                    'TITLE': title,
                     # Best guess is the filename without the extension, but this is just a guess and may not be correct.
-                    'IMDB_TITLE': ".".join(video_path.split("\\")[-1].split(".")[:-1]),
+                    'IMDB_TITLE': filename,
                     'WIDTH': resolution['width'],
                     'HEIGHT': resolution['height']
                 }

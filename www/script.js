@@ -104,6 +104,56 @@ function createFeatureElement(feature) {
     return featureElement;
 }
 
+function getSavedThemePreference() {
+    const savedPreference = localStorage.getItem("themePreference");
+    if (savedPreference === "light" || savedPreference === "dark" || savedPreference === "system") {
+        return savedPreference;
+    }
+    return "system";
+}
+
+function applyThemePreference(preference) {
+    const themeToggle = document.getElementById("theme-toggle");
+    if (themeToggle) {
+        themeToggle.setAttribute("data-theme-selection", preference);
+        themeToggle.querySelectorAll(".theme-toggle-option").forEach((button) => {
+            button.setAttribute("aria-checked", String(button.dataset.themeOption === preference));
+        });
+    }
+
+    if (preference === "system") {
+        document.body.removeAttribute("data-theme");
+        return;
+    }
+
+    document.body.setAttribute("data-theme", preference);
+}
+
+function initializeThemeToggle() {
+    const themeToggle = document.getElementById("theme-toggle");
+    if (!themeToggle) {
+        return;
+    }
+
+    const savedPreference = getSavedThemePreference();
+    applyThemePreference(savedPreference);
+
+    themeToggle.querySelectorAll(".theme-toggle-option").forEach((button) => {
+        button.addEventListener("click", () => {
+            const nextPreference = button.dataset.themeOption;
+            localStorage.setItem("themePreference", nextPreference);
+            applyThemePreference(nextPreference);
+        });
+    });
+
+    const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    systemThemeQuery.addEventListener("change", () => {
+        if (getSavedThemePreference() === "system") {
+            applyThemePreference("system");
+        }
+    });
+}
+
 function displayResults(results) {
     // Get the title from form data
     const titleInput = document.getElementById("title");
@@ -214,6 +264,8 @@ function displayResults(results) {
 
 // Onload entry point for the script
 window.onload = function() {
+    initializeThemeToggle();
+
     // Get the search form and add an event listener for the submit event
     const searchForm = document.getElementById("search-form");
     searchForm.addEventListener("submit", function(event) {

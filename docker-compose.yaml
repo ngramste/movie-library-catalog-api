@@ -46,6 +46,7 @@ services:
     restart: always
     env_file: .env
     environment:
+      PYTHONUNBUFFERED: "1"
       TZ: ${TIMEZONE}
     volumes:
       - ./media/Movies:/movies

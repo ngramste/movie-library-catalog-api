@@ -4,9 +4,17 @@
     <script src="script.js"></script>
     <link rel="stylesheet" href="style.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="imgs/favicon.png">
 </head>
     <body>
-        <h1 class="page-title">Welcome to the Movie Library</h1>
+        <div class="page-header">
+            <h1 class="page-title">Welcome to the Movie Library</h1>
+            <div class="theme-toggle" id="theme-toggle" role="radiogroup" aria-label="Theme selection" data-theme-selection="system">
+                <button type="button" class="theme-toggle-option" data-theme-option="light" role="radio" aria-checked="false">Light</button>
+                <button type="button" class="theme-toggle-option" data-theme-option="system" role="radio" aria-checked="true">System</button>
+                <button type="button" class="theme-toggle-option" data-theme-option="dark" role="radio" aria-checked="false">Dark</button>
+            </div>
+        </div>
         <form id="search-form" class="search-panel" onsubmit="return false;">
             <div class="search-row">
                 <label for="title">Title</label>

@@ -15,8 +15,6 @@ On startup the Python application:
 5. Downloads poster images from IMDb into a local cache served by Nginx.
 6. Starts a Flask REST API for querying the library.
 
-When enabled, a background cron thread can also run scheduled partial rebuilds and poster refreshes.
-
 ---
 
 ## Web UI
@@ -30,7 +28,7 @@ The web interface is served at `http://<host>/` and provides a searchable, card-
   - Poster image (cached locally, falls back to a placeholder)
   - Quality badge (**UHD**, **Blu-ray**, or **DVD**) derived from the video resolution
   - Title and edition
-  - Year, MPA rating, runtime, director, actors, and genres
+  - Year, director, actors, and genres
   - Plot summary
   - Collapsible **Special Features** panel listing available bonus content subfolders
 - **Dark/light mode** support via `prefers-color-scheme`.
@@ -128,26 +126,9 @@ MYSQL_DATABASE=movies
 MYSQL_USER=moviesuser
 MYSQL_PASSWORD=changeme
 
-# Movies folder
-MOVIES_PATH=/movies
-
-# Python app
-PYTHON_APP_IMAGE=movies_metadata_app
-# Allow writing to the media files to add metadata
-ENABLE_WRITE=False
-# Drop the entire database and recreate it from scratch
-FULL_REBUILD_DB=False
-# Skip touching the database and just launch the app quickly for development.
-# A True value supersedes both ENABLE_WRITE and FULL_REBUILD_DB skipping both actions
-QUICK_LAUNCH_DEV=False
-ENABLE_CRON_DB_REBUILD=True
-# Cron schedule for rebuilding the database
-CRON_DB_REBUILD_SCHEDULE=0 4 * * *
-
-TIMEZONE=America/Chicago
-
-# Open movie database API key
 OMDB_API_KEY=your_omdb_api_key_here
+
+MOVIES_PATH=/movies
 ```
 
 ### 2. Organise your movie files
@@ -170,7 +151,7 @@ media/Movies/
 Optional special-feature subfolders are detected automatically:
 ```
 Jaws (1975)/
-  Behind The Scenes/
+  Behind the Scenes/
   Trailers/
   Jaws (1975).mkv
 ```
@@ -204,14 +185,6 @@ Or do a full rebuild (drops and recreates the database):
 ```bash
 docker compose up --build --force-recreate python_app
 ```
-
-Rebuild modes:
-
-- `FULL_REBUILD_DB=True`: drops and recreates the `movies` table, then rescans everything.
-- `FULL_REBUILD_DB=False`: performs a partial rebuild by rescanning disk, updating existing rows, adding new rows, and removing rows whose files no longer exist.
-- `QUICK_LAUNCH_DEV=True`: skips startup rebuild and poster download entirely (useful for fast API/UI iteration).
-
-When `ENABLE_CRON_DB_REBUILD=True`, the app uses `CRON_DB_REBUILD_SCHEDULE` and timezone (`TIMEZONE`, mapped to `TZ`) to run scheduled partial rebuilds and poster downloads in the background.
 
 ### Updating the frontend only
 

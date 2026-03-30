@@ -110,8 +110,10 @@ def get_imdb_info(title, year, api_key):
         data = response.json()
 
     if 'Error' not in data:
+        print(f"Found OMDB match for title='{title}', year='{year}': imdb_id='{data.get('imdbID', 'N/A')}'")
         return data
     else:
+        print(f"No OMDB match found for title='{title}', year='{year}'")
         return None
 
 def connect_db(retries=10, delay=5):
@@ -226,9 +228,9 @@ def rebuild_db(full_rebuild):
 
         # Check the file for existing imdb data within the metadata of the file
         data = metadata.get_metadata(path)
-
+        
         # If the file is missing imdb data, try to get it from the filename and the OMDB API
-        if not data or 'format' not in data or 'tags' not in data['format'] or 'IMDB' not in data['format']['tags']:
+        if not data or 'format' not in data or 'tags' not in data['format'] or 'IMDB' not in data['format']['tags'] or "error" == data['format']['tags'].get('IMDB', ''):
             print(f"Metadata for '{title}' ({year}) is missing IMDb data. Attempting to fetch from OMDB API...")
             api_key = os.getenv("OMDB_API_KEY")
             if api_key:
@@ -237,10 +239,8 @@ def rebuild_db(full_rebuild):
                     if os.getenv("ENABLE_WRITE", "False").lower() == "true":
                         # Write the metadata to file
                         metadata.update_metadata(path, imdb_data)
-                        data = metadata.get_metadata(path)
-                    else:
-                        # Build the metadata object from the fetched IMDb data without writing it to the file
-                        data = metadata.omdb_to_metadata(path, imdb_data)
+                        
+                    data = metadata.omdb_to_metadata(path, imdb_data)
 
                 else:
                     print(f"Could not fetch IMDb data for '{title}' ({year}) from OMDB API.")
@@ -431,6 +431,7 @@ def update_db_thread():
         sleep_seconds = max(1, int((next_run - current_time_in_timezone()).total_seconds()))
         print(f"Current system time is {current_time_in_timezone().isoformat()}")
         print(f"Next scheduled database rebuild at {next_run.isoformat()}")
+        print(f"Sleeping for {sleep_seconds} seconds until next scheduled database rebuild...")
         time.sleep(sleep_seconds)
 
         try:
