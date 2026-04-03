@@ -22,7 +22,7 @@ import movie_metadata as metadata
 
 load_dotenv()  # Load .env
 
-MYSQL_HOST = "mysql"
+MYSQL_HOST = os.getenv("MYSQL_HOST", "mysql")
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DB = os.getenv("MYSQL_DATABASE")
@@ -471,8 +471,6 @@ def update_db_thread():
 
 if __name__ == "__main__":
     if os.getenv("QUICK_LAUNCH_DEV", "False").lower() == "false":
-        print("Waiting for MySQL to be ready...")
-        time.sleep(5)
         if os.getenv("FULL_REBUILD_DB", "False").lower() == "true":
             print("Initializing database...")
             initialize_db()

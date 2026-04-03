@@ -1,12 +1,17 @@
+x-no-apparmor: &no_apparmor
+  security_opt:
+    - apparmor:unconfined
+
 services:
   mysql:
+    <<: *no_apparmor
     image: mysql:8.1
     container_name: movies_mysql
     restart: always
     env_file: .env
     environment:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-changeme}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE:-myapp}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-movies}"
       MYSQL_USER: "${MYSQL_USER:-webuser}"
       MYSQL_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
     healthcheck:
@@ -16,10 +21,13 @@ services:
       retries: 10
     volumes:
       - mysql_data:/var/lib/mysql
+    ports:
+      - "${MYSQL_HOST_PORT:-3306}:3306"
     networks:
       - app_network
 
   phpmyadmin:
+    <<: *no_apparmor
     image: phpmyadmin/phpmyadmin
     container_name: movies_phpmyadmin
     restart: always
@@ -34,6 +42,7 @@ services:
       - app_network
 
   catalog_api:
+    <<: *no_apparmor
     image: ${CATALOG_API_IMAGE:-movie-library/catalog_api:latest}
     build:
       context: ./catalog_api
@@ -44,16 +53,21 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       TZ: "${TZ:-America/Chicago}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-movies}"
+      MYSQL_USER: "${MYSQL_USER:-webuser}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
     volumes:
       - "${MOVIES_PATH:-./media/Movies}:/movies"
       - posters:/posters
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     command: python app.py
     networks:
       - app_network
 
   nginx:
+    <<: *no_apparmor
     image: nginx:latest
     container_name: movies_nginx
     restart: always
@@ -69,6 +83,7 @@ services:
       - app_network
 
   registry:
+    <<: *no_apparmor
     image: registry:2
     container_name: movies_registry
     restart: unless-stopped
