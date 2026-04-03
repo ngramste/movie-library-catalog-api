@@ -27,7 +27,7 @@ services:
     environment:
       MYSQL_USER: "${MYSQL_USER:-webuser}"
       MYSQL_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE:-myapp}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-movies}"
       # Allow writing to the media files to add metadata
       ENABLE_WRITE: "${ENABLE_WRITE:-False}"
       # Drop the entire database and recreate it from scratch
