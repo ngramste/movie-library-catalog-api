@@ -126,6 +126,8 @@ MYSQL_DATABASE=movies
 MYSQL_USER=moviesuser
 MYSQL_PASSWORD=changeme
 
+# Movies folder
+MOVIES_PATH=./media/Movies
 
 # Ports for services
 UI_PORT=80
