@@ -20,7 +20,7 @@ services:
       - app_network
 
   catalog_api:
-    image: ${CATALOG_API_IMAGE:-ghcr.io/ngramste/movie-library-catalog-api:1.0.0}
+    image: ${CATALOG_API_IMAGE:-ghcr.io/ngramste/movie-library-catalog-api:1.0.5}
     container_name: movies_catalog_api
     restart: unless-stopped
     pull_policy: always
