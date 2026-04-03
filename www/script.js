@@ -50,34 +50,17 @@ function convertFormDataToQuery(formData) {
 }
 
 function performSearch(query) {
-    // Create a new XMLHttpRequest object
-    const xhr = new XMLHttpRequest();
-
-    // Set up the callback function to handle the response
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === XMLHttpRequest.DONE) {
-            if (xhr.status === 200) {
-                // Parse the JSON response
-                const results = JSON.parse(xhr.responseText);
-
-                // Check that the current query matches the query that was sent (to avoid displaying results from an outdated query)
-                if (query !== convertFormDataToQuery(new FormData(document.getElementById("search-form")))) {
-                    console.warn("Received results for an outdated query. Ignoring.");
-                    return;
+    return new Promise((resolve, reject) => {
+        fetch(`/api/movies?${query}`)
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-
-                displayResults(results); // Call a function to display the results
-            } else {
-                console.error("Error fetching search results:", xhr.statusText);
-            }
-        }
-    };
-
-    // Open a GET request to the search endpoint with the query as a parameter
-    xhr.open("GET", `/api/movies?${query}`, true);
-
-    // Send the request
-    xhr.send();
+                return response.json();
+            })
+            .then((data) => resolve(data))
+            .catch((error) => reject(error));
+    });
 }
 
 function resolutionToQuality(resolution) {
@@ -270,13 +253,17 @@ window.onload = function() {
     const searchForm = document.getElementById("search-form");
     searchForm.addEventListener("submit", function(event) {
         event.preventDefault(); // Prevent the default form submission behavior
-        performSearch(convertFormDataToQuery(new FormData(searchForm))); // Call the function to perform the search
+        performSearch(convertFormDataToQuery(new FormData(searchForm)))
+            .then((results) => displayResults(results))
+            .catch((error) => console.error("Error performing search:", error));
     });
 
     const titleInput = document.getElementById("title");
     titleInput.addEventListener("input", function() {
         if (titleInput.value.length >= 2) {
-            performSearch(convertFormDataToQuery(new FormData(searchForm)));
+            performSearch(convertFormDataToQuery(new FormData(searchForm)))
+                .then((results) => displayResults(results))
+                .catch((error) => console.error("Error performing search:", error));
         } else {
             // Clear the results if the input length is less than 2
             const resultCount = document.getElementById("result-count");
@@ -289,7 +276,9 @@ window.onload = function() {
     const yearInput = document.getElementById("year");
     yearInput.addEventListener("input", function() {
         if (yearInput.value.length == 4) {
-            performSearch(convertFormDataToQuery(new FormData(searchForm)));
+            performSearch(convertFormDataToQuery(new FormData(searchForm)))
+                .then((results) => displayResults(results))
+                .catch((error) => console.error("Error performing search:", error));
         } else {
             // Clear the results if the input length is less than 4
             const resultCount = document.getElementById("result-count");
@@ -301,7 +290,9 @@ window.onload = function() {
     const plotInput = document.getElementById("plot");
     plotInput.addEventListener("input", function() {
         if (plotInput.value.length >= 3) {
-            performSearch(convertFormDataToQuery(new FormData(searchForm)));
+            performSearch(convertFormDataToQuery(new FormData(searchForm)))
+                .then((results) => displayResults(results))
+                .catch((error) => console.error("Error performing search:", error));
         } else {
             // Clear the results if the input length is less than 3
             const resultCount = document.getElementById("result-count");

@@ -126,14 +126,33 @@ MYSQL_DATABASE=movies
 MYSQL_USER=moviesuser
 MYSQL_PASSWORD=changeme
 
-OMDB_API_KEY=your_omdb_api_key_here
 
-MOVIES_PATH=/movies
+# Ports for services
+UI_PORT=80
+PHPMYADMIN_PORT=8080
+
+# Python app
+CATALOG_API_IMAGE=movies_metadata_app
+# Allow writing to the media files to add metadata
+ENABLE_WRITE=False
+# Drop the entire database and recreate it from scratch
+FULL_REBUILD_DB=False
+# Skip touching the database and just launch the app quickly for development.
+# A True value supersedes both ENABLE_WRITE and FULL_REBUILD_DB skipping both actions
+QUICK_LAUNCH_DEV=False
+ENABLE_CRON_DB_REBUILD=True
+# Cron schedule for rebuilding the database
+CRON_DB_REBUILD_SCHEDULE=0 4 * * *
+
+TZ=America/Chicago
+
+# Open movie database API key
+OMDB_API_KEY=your_omdb_api_key_here
 ```
 
 ### 2. Organise your movie files
 
-Place your movie folders inside `media/Movies/`. Each folder must follow this naming convention:
+Place your movie folders inside `media/Movies/` or wherever MOVIES_PATH points to. Each folder must follow this naming convention:
 
 ```
 Movie Title (Year)/
@@ -177,13 +196,13 @@ On first run the Python container will scan your movies directory, fetch missing
 To rescan your movie collection after adding or removing files, restart the Python container:
 
 ```bash
-docker compose restart python_app
+docker compose restart catalog_api
 ```
 
 Or do a full rebuild (drops and recreates the database):
 
 ```bash
-docker compose up --build --force-recreate python_app
+docker compose up --build --force-recreate catalog_api
 ```
 
 ### Updating the frontend only
@@ -192,20 +211,119 @@ Because the `www/` directory is mounted directly into the Nginx container, chang
 
 ---
 
+## Publishing release images (API + Web)
+
+For production-style deployments, publish two images with the same tag:
+
+- `movie-library-catalog-api` (Flask API + metadata processing)
+- `movie-library-web` (Nginx + baked `www/` frontend files)
+
+Use [docker-compose.publish.yml](docker-compose.publish.yml) to build and push both in one flow.
+
+### Option A: Push both images to GHCR
+
+```bash
+export CATALOG_API_IMAGE=ghcr.io/<github-username>/movie-library-catalog-api:1.0.0
+export WEB_IMAGE=ghcr.io/<github-username>/movie-library-web:1.0.0
+
+# Use a GitHub PAT with write:packages and read:packages
+echo <github_pat> | docker login ghcr.io -u <github-username> --password-stdin
+
+docker compose -f docker-compose.publish.yml build
+docker compose -f docker-compose.publish.yml push
+```
+
+Users can download with:
+
+```bash
+docker pull ghcr.io/<github-username>/movie-library-catalog-api:1.0.0
+docker pull ghcr.io/<github-username>/movie-library-web:1.0.0
+```
+
+### Option B: Push both images to a self-hosted registry
+
+```bash
+export CATALOG_API_IMAGE=registry.<your-domain>/movie-library/catalog-api:1.0.0
+export WEB_IMAGE=registry.<your-domain>/movie-library/web:1.0.0
+
+docker login registry.<your-domain>
+docker compose -f docker-compose.publish.yml build
+docker compose -f docker-compose.publish.yml push
+```
+
+For self-hosting, use TLS and authentication on the registry before sharing images.
+
+### Option C: Local registry via Docker Compose profile
+
+This project includes an optional local registry service in [docker-compose.yaml](docker-compose.yaml) under the `registry` profile.
+
+Start the local registry:
+
+```bash
+docker compose --profile registry up -d registry
+```
+
+Publish both images to the local registry:
+
+```bash
+export CATALOG_API_IMAGE=localhost:5000/movie-library/catalog-api:1.0.0
+export WEB_IMAGE=localhost:5000/movie-library/web:1.0.0
+
+docker compose -f docker-compose.publish.yml build
+docker compose -f docker-compose.publish.yml push
+```
+
+Pull to verify:
+
+```bash
+docker pull localhost:5000/movie-library/catalog-api:1.0.0
+docker pull localhost:5000/movie-library/web:1.0.0
+```
+
+If you want to expose it on your LAN, set a host port in `.env`:
+
+```env
+REGISTRY_PORT=5000
+```
+
+Then tag/push using your host IP or DNS name instead of `localhost`, for example `192.168.1.10:5000/...`.
+Remote Docker clients may require an `insecure-registries` daemon setting unless you configure TLS.
+
+## Deploying from published images
+
+Use [docker-compose.example.yml](docker-compose.example.yml) for image-only deployment (no local code mounts required for frontend/API images).
+
+```bash
+docker compose -f docker-compose.example.yml up -d
+```
+
+Override image tags as needed:
+
+```bash
+export CATALOG_API_IMAGE=ghcr.io/<github-username>/movie-library-catalog-api:1.0.0
+export WEB_IMAGE=ghcr.io/<github-username>/movie-library-web:1.0.0
+docker compose -f docker-compose.example.yml up -d
+```
+
+---
+
 ## Project structure
 
 ```
 .
 ├── docker-compose.yaml
+├── docker-compose.publish.yml
+├── docker-compose.example.yml
 ├── .env                    # Environment variables (not committed)
 ├── nginx/
 │   └── default.conf        # Nginx routing config
-├── python_app/
+├── catalog_api/
 │   ├── app.py              # Flask API + startup logic
 │   ├── movie_metadata.py   # ffprobe metadata helpers
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── www/
+│   ├── Dockerfile          # Web image build (Nginx + static UI)
 │   ├── index.html          # Web UI
 │   ├── script.js
 │   ├── style.css

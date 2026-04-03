@@ -26,11 +26,10 @@ MYSQL_HOST = "mysql"
 MYSQL_USER = os.getenv("MYSQL_USER")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DB = os.getenv("MYSQL_DATABASE")
-MOVIES_PATH = os.getenv("MOVIES_PATH", "/movies")
+MOVIES_PATH = "/movies"
 TIMEZONE = os.getenv("TZ", "America/Chicago")
 
 app = Flask(__name__)
-
 
 def current_time_in_timezone():
     return datetime.now(ZoneInfo(TIMEZONE))
@@ -132,13 +131,10 @@ def connect_db(retries=10, delay=5):
             time.sleep(delay)
     raise Exception("Could not connect to MySQL after multiple retries")
 
-def initialize_db():
-    db = connect_db()
-    cursor = db.cursor()
-    # Simple schema
-    cursor.execute("DROP TABLE IF EXISTS movies")
+
+def ensure_movies_table(cursor):
     cursor.execute("""
-        CREATE TABLE movies (
+        CREATE TABLE IF NOT EXISTS movies (
             id INT AUTO_INCREMENT PRIMARY KEY,
             filename VARCHAR(255),
             filesize BIGINT,
@@ -149,9 +145,18 @@ def initialize_db():
             edition VARCHAR(255),
             metadata JSON,
             filetype VARCHAR(50),
+            missing_featurettes BOOLEAN,
             special_features JSON
         )
     """)
+
+def initialize_db():
+    db = connect_db()
+    cursor = db.cursor()
+    # Simple schema
+    cursor.execute("DROP TABLE IF EXISTS movies")
+    db.commit()
+    ensure_movies_table(cursor)
     db.commit()
     cursor.close()
     db.close()
@@ -159,6 +164,10 @@ def initialize_db():
 def rebuild_db(full_rebuild):
     db = connect_db()
     cursor = db.cursor()
+
+    # Fresh deployments may not have the movies table yet.
+    ensure_movies_table(cursor)
+    db.commit()
 
     # If we are not doing a full rebuild, mark all existing rows as file_exists = FALSE so that we spot missing files when we scan the folders
     if not full_rebuild:
@@ -197,12 +206,20 @@ def rebuild_db(full_rebuild):
         subfolders = [f for f in subfolders if not f.startswith(".") and not f.startswith("__") and not f.startswith("@eaDir")]
 
         subfolder_data = {}
+        missing_featurettes = True
+        
         for subfolder in subfolders:
             subfolder_path = join(folder_path, subfolder)
             subfolder_files = [f for f in listdir(subfolder_path) if isfile(join(subfolder_path, f))]
             subfolder_data[subfolder] = subfolder_files
+            if subfolder_files:
+                missing_featurettes = False
 
         if subfolder_data == {}:
+            # If there is a file in the folder_path titled no_featurettes, the mark missing_featurettes as false
+            if "no_featurettes" in files:
+                missing_featurettes = False
+
             subfolder_data = None
 
         # If we are doing a partial rebuild, check if this file already exists in the database and mark it as file_exists = TRUE if it does
@@ -214,7 +231,7 @@ def rebuild_db(full_rebuild):
                 cursor.execute("UPDATE movies SET file_exists = TRUE WHERE id = %s", (row[0],))
 
                 # Update the subfolder_data column for this row in the database
-                cursor.execute("UPDATE movies SET special_features = %s WHERE id = %s", (json.dumps(subfolder_data), row[0]))
+                cursor.execute("UPDATE movies SET special_features = %s, missing_featurettes = %s WHERE id = %s", (json.dumps(subfolder_data), missing_featurettes, row[0]))
 
                 db.commit()
                 continue
@@ -248,8 +265,8 @@ def rebuild_db(full_rebuild):
         # Insert the data into the database
         try:
             cursor.execute(
-                "INSERT INTO movies (filename, filesize, file_exists, imdb_id, title, year, edition, metadata, filetype, special_features) \
-                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO movies (filename, filesize, file_exists, imdb_id, title, year, edition, metadata, filetype, missing_featurettes, special_features) \
+                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                 (
                     file, 
                     os.path.getsize(path), 
@@ -260,6 +277,7 @@ def rebuild_db(full_rebuild):
                     edition, 
                     json.dumps(data), 
                     filetype, 
+                    missing_featurettes,
                     json.dumps(subfolder_data)
                 )
             )
@@ -295,7 +313,8 @@ def list_movies():
             "plot": "Filter by plot (partial match, case insensitive)",
             "actor": "Filter by actor (partial match, case insensitive)",
             "director": "Filter by director (partial match, case insensitive)",
-            "genre": "Filter by genre (partial match, case insensitive)"
+            "genre": "Filter by genre (partial match, case insensitive)",
+            "missing_featurettes": "Filter by whether the movie is missing featurettes or not (true/false)"
         })
 
     imdb_id = request.args.get("imdb_id")
@@ -309,6 +328,7 @@ def list_movies():
     actor = request.args.get("actor")
     director = request.args.get("director")
     genre = request.args.get("genre")
+    missing_featurettes = request.args.get("missing_featurettes")
 
     db = connect_db()
     cursor = db.cursor(dictionary=True)
@@ -356,6 +376,12 @@ def list_movies():
         # Genre is stored in the metadata JSON column. It is in metadata->'$.format.tags.GENRE'
         query += " AND metadata->>'$.format.tags.GENRE' LIKE %s COLLATE utf8mb4_0900_ai_ci"
         params.append(f"%{genre}%")
+    if missing_featurettes:
+        if missing_featurettes.lower() == "true":
+            query += " AND missing_featurettes = TRUE"
+        elif missing_featurettes.lower() == "false":
+            query += " AND missing_featurettes = FALSE"
+
 
     cursor.execute(query, params)
     result = cursor.fetchall()

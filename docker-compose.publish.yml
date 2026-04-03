@@ -1,0 +1,12 @@
+services:
+  catalog_api:
+    image: ${CATALOG_API_IMAGE:-ghcr.io/ngramste/movie-library-catalog-api:1.0.0}
+    build:
+      context: ./catalog_api
+      dockerfile: Dockerfile
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/ngramste/movie-library-web:1.0.0}
+    build:
+      context: .
+      dockerfile: ./www/Dockerfile
