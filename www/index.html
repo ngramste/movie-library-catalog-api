@@ -25,8 +25,25 @@
                 <input type="text" id="year" name="year" placeholder="e.g. 1999" inputmode="numeric">
             </div>
             <div class="search-row search-row-full">
-                <label for="plot">Plot</label>
-                <input type="text" id="plot" name="plot" placeholder="Search within plot text">
+                <details id="detailed-search">
+                    <summary>Detailed Search</summary>
+                    <div class="search-row search-row-full">
+                        <label for="plot">Plot</label>
+                        <input type="text" id="plot" name="plot" placeholder="Search within plot text">
+                    </div>
+                    <div class="search-row search-row-full">
+                        <label for="genre">Genre</label>
+                        <input type="text" id="genre" name="genre" placeholder="e.g. Action, Drama, Comedy">
+                    </div>
+                    <div class="search-row search-row-full">
+                        <label for="director">Director</label>
+                        <input type="text" id="director" name="director" placeholder="e.g. James Cameron">
+                    </div>
+                    <div class="search-row search-row-full">
+                        <label for="actor">Actor/Actress</label>
+                        <input type="text" id="actor" name="actor" placeholder="e.g. Tom Cruise">
+                    </div>
+                </details>
             </div>
         </form>
 

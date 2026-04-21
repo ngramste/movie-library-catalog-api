@@ -33,7 +33,10 @@ function convertFormDataToQuery(formData) {
     const json = {
         title: formData.get("title"),
         year: formData.get("year"),
-        plot: formData.get("plot")
+        plot: formData.get("plot"),
+        genre: formData.get("genre"),
+        director: formData.get("director"),
+        actor: formData.get("actor")
     };
 
     let query = Object.entries(json).reduce((query, [key, value]) => {
@@ -245,6 +248,32 @@ function displayResults(results) {
     });
 }
 
+function validSearch(searchForm) {
+    let formData = new FormData(searchForm);
+    const entries = Object.fromEntries(formData.entries());
+
+    return entries.title.length >= 2 || 
+            entries.year.length == 4 ||
+            entries.plot.length >= 3 ||
+            entries.genre.length >= 2 ||
+            entries.director.length >= 2 ||
+            entries.actor.length >= 2;
+}
+
+function handleInput (searchForm) {
+    if (validSearch(searchForm)) {
+        performSearch(convertFormDataToQuery(new FormData(searchForm)))
+            .then((results) => displayResults(results))
+            .catch((error) => console.error("Error performing search:", error));
+    } else {
+        // Clear the results if the input length is less than 2
+        const resultCount = document.getElementById("result-count");
+        const resultsContainer = document.getElementById("results");
+        resultCount.textContent = "";
+        resultsContainer.innerHTML = "";
+    }
+}
+
 // Onload entry point for the script
 window.onload = function() {
     initializeThemeToggle();
@@ -259,46 +288,32 @@ window.onload = function() {
     });
 
     const titleInput = document.getElementById("title");
-    titleInput.addEventListener("input", function() {
-        if (titleInput.value.length >= 2) {
-            performSearch(convertFormDataToQuery(new FormData(searchForm)))
-                .then((results) => displayResults(results))
-                .catch((error) => console.error("Error performing search:", error));
-        } else {
-            // Clear the results if the input length is less than 2
-            const resultCount = document.getElementById("result-count");
-            const resultsContainer = document.getElementById("results");
-            resultCount.textContent = "";
-            resultsContainer.innerHTML = "";
-        }
-    });
+    titleInput.addEventListener("input", () => handleInput(searchForm));
 
     const yearInput = document.getElementById("year");
-    yearInput.addEventListener("input", function() {
-        if (yearInput.value.length == 4) {
-            performSearch(convertFormDataToQuery(new FormData(searchForm)))
-                .then((results) => displayResults(results))
-                .catch((error) => console.error("Error performing search:", error));
-        } else {
-            // Clear the results if the input length is less than 4
-            const resultCount = document.getElementById("result-count");
-            const resultsContainer = document.getElementById("results");
-            resultCount.textContent = "";
-            resultsContainer.innerHTML = "";
+    yearInput.addEventListener("input", () => handleInput(searchForm));
+
+    const detailedToggle = document.getElementById("detailed-search");
+    detailedToggle.addEventListener("toggle", function() {
+        if (!detailedToggle.open) {
+            plotInput.value = "";
+            genreInput.value = "";
+            directorInput.value = "";
+            actorInput.value = "";
         }
+            
+        handleInput(searchForm);
     });
+    
     const plotInput = document.getElementById("plot");
-    plotInput.addEventListener("input", function() {
-        if (plotInput.value.length >= 3) {
-            performSearch(convertFormDataToQuery(new FormData(searchForm)))
-                .then((results) => displayResults(results))
-                .catch((error) => console.error("Error performing search:", error));
-        } else {
-            // Clear the results if the input length is less than 3
-            const resultCount = document.getElementById("result-count");
-            const resultsContainer = document.getElementById("results");
-            resultCount.textContent = "";
-            resultsContainer.innerHTML = "";
-        }
-    });
+    plotInput.addEventListener("input", () => handleInput(searchForm));
+
+    const genreInput = document.getElementById("genre");
+    genreInput.addEventListener("input", () => handleInput(searchForm));
+
+    const directorInput = document.getElementById("director");
+    directorInput.addEventListener("input", () => handleInput(searchForm));
+
+    const actorInput = document.getElementById("actor");
+    actorInput.addEventListener("input", () => handleInput(searchForm));
 }
