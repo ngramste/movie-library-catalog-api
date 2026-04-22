@@ -262,8 +262,14 @@ function validSearch(searchForm) {
 
 function handleInput (searchForm) {
     if (validSearch(searchForm)) {
-        performSearch(convertFormDataToQuery(new FormData(searchForm)))
-            .then((results) => displayResults(results))
+        const formSnapshot = convertFormDataToQuery(new FormData(searchForm));
+        performSearch(formSnapshot)
+            .then((results) => {
+                // Validate that this result is still relevant
+                if (formSnapshot === convertFormDataToQuery(new FormData(searchForm))) {
+                    displayResults(results);
+                }
+            })
             .catch((error) => console.error("Error performing search:", error));
     } else {
         // Clear the results if the input length is less than 2
@@ -283,7 +289,12 @@ window.onload = function() {
     searchForm.addEventListener("submit", function(event) {
         event.preventDefault(); // Prevent the default form submission behavior
         performSearch(convertFormDataToQuery(new FormData(searchForm)))
-            .then((results) => displayResults(results))
+            .then((results) => {
+                // Validate that this result is still relevant
+                if (formSnapshot === convertFormDataToQuery(new FormData(searchForm))) {
+                    displayResults(results);
+                }
+            })
             .catch((error) => console.error("Error performing search:", error));
     });
 
