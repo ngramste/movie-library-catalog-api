@@ -12,6 +12,7 @@ import requests
 import threading
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
+import roman
 
 import re
 
@@ -130,7 +131,6 @@ def connect_db(retries=10, delay=5):
             print(f"MySQL connection failed ({i+1}/{retries}): {e}")
             time.sleep(delay)
     raise Exception("Could not connect to MySQL after multiple retries")
-
 
 def ensure_movies_table(cursor):
     cursor.execute("""
@@ -394,6 +394,49 @@ def list_movies():
             row["special_features"] = json.loads(row["special_features"])
     return jsonify(result)
 
+def download_amazon_poster(url, output_path):
+    try:
+        print(f"Downloading poster from Amazon to {output_path}")
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(output_path, "wb") as f:
+                f.write(response.content)
+                return 0
+        elif response.status_code == 202 or response.status_code == 429:
+            # We are being throttled by Amazon, return a special code to indicate this
+            return -1
+        else:
+            print(f"Failed to download poster from Amazon, status code: {response.status_code}")
+            return -2
+    except Exception as e:
+        print(f"Error downloading poster from Amazon: {e}")
+        return -3
+
+def download_omdb_poster(imdb_id, output_path):
+    api_key = os.getenv("OMDB_API_KEY")
+    url = f"https://img.omdbapi.com/?apikey={api_key}&i={imdb_id}"
+
+    if not api_key:
+        print("OMDB_API_KEY is not set in the environment variables. Cannot download poster.")
+        return -4
+
+    try:
+        print(f"Downloading poster for IMDb ID {imdb_id} to {output_path}")
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(output_path, "wb") as f:
+                f.write(response.content)
+                return 0
+        elif response.status_code == 202 or response.status_code == 429:
+            print("Requests are being throttled by OMDB. Skipping further poster downloads.")
+            return -1
+        else:
+            print(f"Failed to download poster for IMDb ID {imdb_id}, status code: {response.status_code}")
+            return -2
+    except Exception as e:
+        print(f"Error downloading poster for IMDb ID {imdb_id}: {e}")
+        return -3
+
 def download_posters():
     db = connect_db()
     cursor = db.cursor(dictionary=True)
@@ -420,18 +463,19 @@ def download_posters():
                 if os.path.exists(output_path):
                     continue
 
-                try:
-                    print(f"Downloading poster for {movie['title']} ({movie['year']}) to {output_path}")
-                    response = requests.get(poster_url)
-                    if response.status_code == 200:
-                        with open(output_path, "wb") as f:
-                            f.write(response.content)
-                    elif response.status_code == 202 or response.status_code == 429:
-                        requests_throttled = True
+                print(f"Downloading poster for {movie['title']} ({movie['year']}) to {output_path}")
+                amazon_result = download_amazon_poster(poster_url, output_path)
+                if amazon_result == -1:
+                    print("Requests are being throttled by Amazon. Skipping further poster downloads.")
+                    requests_throttled = True
+                if amazon_result != 0:
+                    imdb_id = movie.get("imdb_id")
+                    if imdb_id:
+                        omdb_result = download_omdb_poster(imdb_id, output_path)
+                        if omdb_result in (-1, -2, -3, -4):
+                            print(f"Poster download failed for {movie['title']} ({movie['year']}) via both Amazon and OMDB")
                     else:
-                        print(f"Failed to download poster for {movie['title']} ({movie['year']}), status code: {response.status_code}")
-                except Exception as e:
-                    print(f"Error downloading poster for {movie['title']} ({movie['year']}): {e}")
+                        print(f"No IMDb ID available for {movie['title']} ({movie['year']})")
 
     cursor.close()
     db.close()

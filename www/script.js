@@ -167,21 +167,34 @@ function displayResults(results) {
     // Iterate over the results and create a new element for each movie
     results.forEach(movie => {
         const clone = template.content.cloneNode(true);
-        let posterUrl = movie.metadata.format.tags.POSTER;
+        const posterRaw = movie.metadata.format.tags.POSTER;
+        const posterEl = clone.querySelector(".movie-poster");
 
-        // Covert the poster URL to point to my posters cache
-        if (posterUrl) {
-            const url = new URL(posterUrl);
-            const filename = url.pathname.split("/").pop();
-            posterUrl = `/posters/${filename}`;
-        }
-
-        clone.querySelector(".movie-poster").addEventListener("error", function() {
-            // If the image fails to load, set the src to a placeholder image
+        // If the poster image element itself fails to load, show placeholder
+        posterEl.addEventListener("error", function() {
             this.src = "/imgs/placeholder-poster.png";
         });
 
-        clone.querySelector(".movie-poster").src = posterUrl;
+        // Verify the poster URL by probing it with a temporary Image. This
+        // avoids calling `new URL(...)` on arbitrary strings (which can throw)
+        // and catches invalid values like "N/A" via the image's error event.
+        if (posterRaw) {
+            const probe = new Image();
+            probe.addEventListener("error", () => {
+                posterEl.src = "/imgs/placeholder-poster.png";
+            });
+            probe.addEventListener("load", () => {
+                // probe.src is resolved to an absolute URL by the browser; take
+                // the filename portion and map to the local posters cache.
+                const parts = probe.src.split("/");
+                const filename = parts.pop() || parts.pop();
+                posterEl.src = `/posters/${filename}`;
+            });
+            // Start loading the probe; if it's invalid the error handler runs
+            probe.src = posterRaw;
+        } else {
+            posterEl.src = "/imgs/placeholder-poster.png";
+        }
         clone.querySelector(".title").textContent = movie.metadata.format.tags.TITLE;
         if (movie.edition) {
             clone.querySelector(".edition").textContent = movie.edition;
